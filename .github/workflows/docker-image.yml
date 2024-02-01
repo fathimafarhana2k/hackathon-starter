@@ -7,7 +7,17 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            stage: build
+          - os: ubuntu-latest
+            stage: scan-vulnerabilities
+          - os: ubuntu-latest
+            stage: code-quality-coverage
 
     steps:
       - name: Checkout Repository
@@ -22,36 +32,23 @@ jobs:
         run: npm install
 
       - name: Build Application
+        if: matrix.stage == 'build'
         run: npm run build
 
-  scan-vulnerabilities:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-
       - name: Set up Trivy
+        if: matrix.stage == 'scan-vulnerabilities'
         run: |
           wget https://github.com/aquasecurity/trivy/releases/download/v0.17.2/trivy_0.17.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.17.2_Linux-64bit.deb
 
       - name: Scan Container Image
+        if: matrix.stage == 'scan-vulnerabilities'
         run: trivy -q --exit-code 1 -f json -o trivy-report.json CONTAINER_IMAGE_NAME
 
-  code-quality-coverage:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-
-      # ... (add code quality and code coverage steps using Black Duck or SonarQube)
+      # Add steps for code quality and coverage under the appropriate stage
 
   deploy-kubernetes:
-    runs-on: macos-latest
+    runs-on: local
     needs: [build, scan-vulnerabilities, code-quality-coverage]
 
     steps:
@@ -65,7 +62,7 @@ jobs:
         run: |
           docker build -t CONTAINER_IMAGE_NAME .
           docker tag CONTAINER_IMAGE_NAME CONTAINER_REGISTRY/CONTAINER_IMAGE_NAME:latest
-          docker push CONTAINER_REGISTRY/CONTAINER_IMAGE_NAME:latest
+          docker push fathimafarhana2k/sample-app:tagname:latest
 
       - name: Set up kubectl
         uses: azure/k8s-set-context@v1
@@ -75,3 +72,6 @@ jobs:
 
       - name: Deploy to Kubernetes
         run: kubectl apply -f kubernetes/
+
+
+
